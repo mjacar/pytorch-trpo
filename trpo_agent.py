@@ -10,8 +10,8 @@ from operator import mul
 from torch import Tensor
 from torch.autograd import Variable
 
-class TRPOLearner:
-  def __init__(self, env=None, policy_model=None, value_function_model=None):
+class TRPOAgent:
+  def __init__(self, env, policy_model, value_function_model):
     self.env = env
     self.policy_model = policy_model
     self.value_function_model = ValueFunctionWrapper(value_function_model)

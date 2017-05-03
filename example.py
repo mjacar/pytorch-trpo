@@ -3,14 +3,17 @@ import gym
 import utils
 
 from models import FeedForwardRegressor, FeedForwardSoftmax
-from trpo_learner import TRPOLearner
+from trpo_agent import TRPOAgent
 
 def main():
   env = gym.make('CartPole-v1')
-  learner = TRPOLearner(env, FeedForwardSoftmax(env.observation_space.shape[0], env.action_space.n), FeedForwardRegressor(env.observation_space.shape[0]))
+  policy_model = FeedForwardSoftmax(env.observation_space.shape[0], env.action_space.n)
+  value_function_model = FeedForwardRegressor(env.observation_space.shape[0])
+  agent = TRPOAgent(env, policy_model, value_function_model)
+
   while(True):
-    kl_old_new, entropy, ev_before, ev_after = learner.step()
-    policy = learner.get_policy()
+    kl_old_new, entropy, ev_before, ev_after = agent.step()
+    policy = agent.get_policy()
     r = evaluation.evaluate_policy(env, policy, 10000, 1.0, 100)
     print("Evaluation avg reward = %f "% r)
     print("KL_Old_New: {}".format(kl_old_new))
