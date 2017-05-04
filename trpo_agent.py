@@ -163,8 +163,7 @@ class TRPOAgent:
     
     # Calculate the surrogate loss as the elementwise product of the advantage and the probability ratio of actions taken
     new_p = torch.cat(self.action_dists).gather(1, torch.cat(self.actions))
-    old_p = torch.cat(self.action_dists).gather(1, torch.cat(self.actions))
-    old_p.detach()
+    old_p = new_p.detach()
     prob_ratio = new_p / old_p
     surrogate_objective = torch.sum(prob_ratio * Variable(self.advantage))
 
