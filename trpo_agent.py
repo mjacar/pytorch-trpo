@@ -87,26 +87,14 @@ class TRPOAgent:
     old_actprob = self.policy_model(observations_tensor)
     return torch.sum(old_actprob * torch.log(old_actprob / actprob), 1).mean()
 
-  def hessian_vector_product(self, vector, r=1e-6):
-    # https://justindomke.wordpress.com/2009/01/17/hessian-vector-products/
-    # Estimate hessian vector product using finite differences
-    # Note that this might be possible to calculate analytically in future versions of PyTorch
-    vector_norm = vector.data.norm()
-    theta = utils.flatten_model_params([param for param in self.policy_model.parameters()]).data
-
-    model_plus = self.construct_model_from_theta(theta + r * (vector.data / vector_norm))
-    model_minus = self.construct_model_from_theta(theta - r * (vector.data / vector_norm))
-
-    kl_plus = self.kl_divergence(model_plus)
-    kl_minus = self.kl_divergence(model_minus)
-    kl_plus.backward()
-    kl_minus.backward()
-
-    grad_plus = utils.flatten_model_params([param.grad for param in model_plus.parameters()]).data
-    grad_minus = utils.flatten_model_params([param.grad for param in model_minus.parameters()]).data
-    damping_term = utils.cg_damping * vector.data
-    
-    return vector_norm * ((grad_plus - grad_minus) / (2 * r)) + damping_term
+  def hessian_vector_product(self, vector):
+    self.policy_model.zero_grad()
+    kl_div = self.kl_divergence(self.policy_model)
+    kl_div.backward(Variable(torch.ones(1,1), requires_grad=True), retain_variables=True)
+    gradient = utils.flatten_model_params([v.grad for v in self.policy_model.parameters()])
+    gradient_vector_product = torch.sum(gradient * vector)
+    gradient_vector_product.backward(torch.ones(gradient.size()))
+    return (utils.flatten_model_params([v.grad for v in self.policy_model.parameters()]) - gradient).data
 
   def conjugate_gradient(self, b, cg_iters=10, residual_tol=1e-10):
     # Returns F^(-1)b where F is the Hessian of the KL divergence
@@ -169,7 +157,7 @@ class TRPOAgent:
 
     # Calculate the gradient of the surrogate loss
     self.policy_model.zero_grad()
-    surrogate_objective.backward()
+    surrogate_objective.backward(Variable(torch.ones(1,1), requires_grad=True), retain_variables=True)
     policy_gradient = utils.flatten_model_params([v.grad for v in self.policy_model.parameters()])
 
     # Use conjugate gradient algorithm to determine the step direction in theta space
