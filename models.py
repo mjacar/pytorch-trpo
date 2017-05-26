@@ -51,25 +51,3 @@ class FeedForwardRegressor(nn.Module):
     output = F.relu(self.fc2(output))
     output = self.head(output)
     return output
-
-class ValueFunctionWrapper(nn.Module):
-  """
-  Wrapper around any value function model to add fit and predict functions
-  """
-  def __init__(self, model):
-    super(ValueFunctionWrapper, self).__init__()
-    self.model = model
-    self.optimizer = optim.Adam(self.model.parameters())
-
-  def forward(self, data):
-    return self.model.forward(data)
-
-  def fit(self, observations, labels):
-    predicted = self.forward(torch.cat([Variable(Tensor(observation)).unsqueeze(0) for observation in observations]))
-    loss = torch.pow(predicted - labels, 2).sum()
-    self.optimizer.zero_grad()
-    loss.backward()
-    self.optimizer.step()
-
-  def predict(self, observations):
-    return self.forward(torch.cat([Variable(Tensor(observation)).unsqueeze(0) for observation in observations]))

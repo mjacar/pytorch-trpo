@@ -1,6 +1,5 @@
-import evaluation
+import evaluation_utils
 import gym
-import utils
 
 from models import FeedForwardRegressor, FeedForwardSoftmax
 from trpo_agent import TRPOAgent
@@ -13,7 +12,7 @@ def main():
 
   while(True):
     policy, diagnostics = agent.step()
-    r = evaluation.evaluate_policy(env, policy, 10000, 1.0, 100)
+    r = evaluation_utils.evaluate_policy(env, policy, 10000, 1.0, 100)
     print("Evaluation avg reward = %f "% r)
     for key, value in diagnostics.iteritems():
       print("{}: {}".format(key, value))
