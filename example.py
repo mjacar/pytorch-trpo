@@ -12,14 +12,12 @@ def main():
   agent = TRPOAgent(env, policy_model, value_function_model)
 
   while(True):
-    kl_old_new, entropy, ev_before, ev_after = agent.step()
+    diagnostics = agent.step()
     policy = agent.get_policy()
     r = evaluation.evaluate_policy(env, policy, 10000, 1.0, 100)
     print("Evaluation avg reward = %f "% r)
-    print("KL_Old_New: {}".format(kl_old_new))
-    print("Entropy: {}".format(entropy))
-    print("EV_Before: {}".format(ev_before))
-    print("EV_After: {}\n".format(ev_after))
+    for key, value in diagnostics.iteritems():
+      print("{}: {}".format(key, value))
 
 if __name__ == "__main__":
   main()
