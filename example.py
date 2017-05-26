@@ -12,8 +12,7 @@ def main():
   agent = TRPOAgent(env, policy_model, value_function_model)
 
   while(True):
-    diagnostics = agent.step()
-    policy = agent.get_policy()
+    policy, diagnostics = agent.step()
     r = evaluation.evaluate_policy(env, policy, 10000, 1.0, 100)
     print("Evaluation avg reward = %f "% r)
     for key, value in diagnostics.iteritems():

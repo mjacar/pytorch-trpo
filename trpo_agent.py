@@ -68,12 +68,6 @@ class TRPOAgent:
     for k, v in self.policy_model.state_dict().iteritems():
       self.policy_model_properties[k] = v.size()
 
-  def get_policy(self):
-    """
-    Return the policy model
-    """
-    return self.policy_model
-
   def construct_model_from_theta(self, theta):
     """
     Given a 1D parameter vector theta, return the policy model parameterized by theta
@@ -219,7 +213,7 @@ class TRPOAgent:
 
   def step(self):
     """
-    Executes an iteration of TRPO and returns diagnostics useful for debugging
+    Executes an iteration of TRPO and returns the resultant policy as well as diagnostics useful for debugging
     """
     # Generate rollout
     self.observations, self.discounted_rewards, self.actions, self.action_dists, self.entropy = self.sample_trajectories()
@@ -266,4 +260,6 @@ class TRPOAgent:
     self.value_function_model.fit(self.observations, Variable(Tensor(self.discounted_rewards)))
     ev_after = utils.explained_variance_1d(self.value_function_model.predict(self.observations).data.squeeze(1).numpy(), self.discounted_rewards)
 
-    return collections.OrderedDict([ ('KL_Old_New', kl_old_new.data[0]), ('Entropy', self.entropy.data[0]), ('EV_Before', ev_before), ('EV_After', ev_after) ])
+    diagnostics = collections.OrderedDict([ ('KL_Old_New', kl_old_new.data[0]), ('Entropy', self.entropy.data[0]), ('EV_Before', ev_before), ('EV_After', ev_after) ])
+
+    return self.policy_model, diagnostics
