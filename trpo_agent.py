@@ -154,7 +154,7 @@ class TRPOAgent:
     """
     self.policy_model.zero_grad()
     kl_div = self.kl_divergence(self.policy_model)
-    kl_div.backward(Variable(torch.ones(1,1), requires_grad=True), retain_variables=True)
+    kl_div.backward(create_graph=True)
     gradient = utils.flatten_model_params([v.grad for v in self.policy_model.parameters()])
     gradient_vector_product = torch.sum(gradient * vector)
     gradient_vector_product.backward(torch.ones(gradient.size()))
@@ -232,7 +232,7 @@ class TRPOAgent:
 
     # Calculate the gradient of the surrogate loss
     self.policy_model.zero_grad()
-    surrogate_objective.backward(Variable(torch.ones(1,1), requires_grad=True), retain_variables=True)
+    surrogate_objective.backward(create_graph=True)
     policy_gradient = utils.flatten_model_params([v.grad for v in self.policy_model.parameters()])
 
     # Use conjugate gradient algorithm to determine the step direction in theta space
