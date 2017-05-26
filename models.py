@@ -8,8 +8,10 @@ import torch.optim as optim
 from torch import Tensor
 from torch.autograd import Variable
 
-# Used for the policy model
 class FeedForwardSoftmax(nn.Module):
+  """
+  Model used for the policy model
+  """
   def __init__(self, input_size, output_layer_size):
     super(FeedForwardSoftmax, self).__init__()
     self.fc1 = nn.Linear(input_size, 64)
@@ -27,8 +29,10 @@ class FeedForwardSoftmax(nn.Module):
     output = self.softmax(self.fc2(output))
     return output
 
-# Used for the value function model
 class FeedForwardRegressor(nn.Module):
+  """
+  Model used for the value function model
+  """
   def __init__(self, input_size):
     super(FeedForwardRegressor, self).__init__()
     self.fc1 = nn.Linear(input_size, 64)
@@ -48,8 +52,10 @@ class FeedForwardRegressor(nn.Module):
     output = self.head(output)
     return output
 
-# Wrapper around any value function model to add fit and predict functions
 class ValueFunctionWrapper(nn.Module):
+  """
+  Wrapper around any value function model to add fit and predict functions
+  """
   def __init__(self, model):
     super(ValueFunctionWrapper, self).__init__()
     self.model = model

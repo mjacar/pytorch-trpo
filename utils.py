@@ -3,9 +3,6 @@ import torch
 import numpy as np
 import scipy.signal as signal
 
-max_kl = 0.01
-cg_damping = 0.1
-
 def flatten_model_params(parameters):
   return torch.cat([param.view(1, -1) for param in parameters], 1)
 
