@@ -298,7 +298,7 @@ class TRPOAgent:
 
     # Calculate the gradient of the surrogate loss
     self.policy_model.zero_grad()
-    surrogate_objective.backward()
+    surrogate_objective.backward(create_graph=True)
     policy_gradient = flatten_model_params([v.grad for v in self.policy_model.parameters()])
 
     # Use conjugate gradient algorithm to determine the step direction in theta space
