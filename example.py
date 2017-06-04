@@ -14,7 +14,7 @@ def main():
     policy, diagnostics = agent.step()
     r = evaluation_utils.evaluate_policy(env, policy, 10000, 1.0, 100)
     print("Evaluation avg reward = %f "% r)
-    for key, value in diagnostics.iteritems():
+    for key, value in diagnostics.items():
       print("{}: {}".format(key, value))
 
 if __name__ == "__main__":
