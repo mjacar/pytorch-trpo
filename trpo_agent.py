@@ -2,8 +2,6 @@ import collections
 import copy
 import torch
 
-from functools import reduce
-
 import numpy as np
 import scipy.signal as signal
 import torch.nn as nn
