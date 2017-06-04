@@ -113,7 +113,7 @@ class TRPOAgent:
 
     # Need to save the shape of the state_dict in order to reconstruct it from a 1D parameter vector
     self.policy_model_properties = collections.OrderedDict()
-    for k, v in self.policy_model.state_dict().iteritems():
+    for k, v in self.policy_model.state_dict().items():
       self.policy_model_properties[k] = v.size()
 
   def construct_model_from_theta(self, theta):
@@ -124,7 +124,7 @@ class TRPOAgent:
     new_model = copy.deepcopy(self.policy_model)
     state_dict = collections.OrderedDict()
     start_index = 0
-    for k, v in self.policy_model_properties.iteritems():
+    for k, v in self.policy_model_properties.items():
       param_length = reduce(mul, v, 1)
       state_dict[k] = theta[start_index : start_index + param_length].view(v)
       start_index += param_length
@@ -231,7 +231,7 @@ class TRPOAgent:
     r = b.clone().data
     x = np.zeros_like(b.data.numpy())
     rdotr = r.dot(r)
-    for i in xrange(self.cg_iters):
+    for i in range(self.cg_iters):
       if self.use_finite_differences:
         z = self.hessian_vector_product_fd(Variable(p))
       else:
