@@ -1,5 +1,6 @@
 import collections
 import copy
+import math
 import torch
 
 import numpy as np
@@ -29,6 +30,12 @@ def explained_variance_1d(ypred, y):
   assert y.ndim == 1 and ypred.ndim == 1
   vary = np.var(y)
   return np.nan if vary==0 else 1 - np.var(y-ypred)/vary
+
+def normal_log_density(x, mean, std):
+  var = std ** 2
+  log_std = torch.log(std)
+  log_density = (-(x - mean) ** 2) / (2 * var) - 0.5 * math.log(2 * math.pi) - log_std
+  return log_density.sum(1)
 
 class ValueFunctionWrapper(nn.Module):
   """
@@ -102,6 +109,7 @@ class TRPOAgent:
     """
 
     self.env = env
+    self.is_discrete = self.env.action_space.__class__.__name__ == 'Discrete'
     self.policy_model = policy_model
     self.value_function_model = ValueFunctionWrapper(value_function_model, value_function_lr)
 
@@ -139,9 +147,15 @@ class TRPOAgent:
     Given an observation, return the action sampled from the policy model as well as the probabilities associated with each action
     """
     observation_tensor = Tensor(observation).unsqueeze(0)
-    probabilities = self.policy_model(Variable(observation_tensor, requires_grad=True))
-    action = probabilities.multinomial(1)
-    return action, probabilities
+    # Is observations_tensor a 3D tensor when discrete? If so, why?
+    if self.is_discrete:
+      probabilities = self.policy_model(Variable(observation_tensor, requires_grad=True))
+      action = probabilities.multinomial(1)
+      return action, probabilities
+    else:
+      action_mean, action_std = self.policy_model(Variable(observation_tensor, requires_grad=True))
+      action = torch.normal(action_mean, action_std)
+      return action, {'mean': action_mean, 'std': action_std}
 
   def sample_trajectories(self):
     """
@@ -151,20 +165,29 @@ class TRPOAgent:
     timesteps_so_far = 0
     entropy = 0
 
+    flatten = lambda l: [item for sublist in l for item in sublist]
+
     while timesteps_so_far < self.max_timesteps:
       observations, actions, rewards, action_distributions = [], [], [], []
       observation = self.env.reset()
       for _ in range(self.max_episode_length):
+        observation = observation if len(observation.shape) == 1 else np.asarray(flatten(observation))
         observations.append(observation)
 
         action, action_dist = self.sample_action_from_policy(observation)
         actions.append(action)
         action_distributions.append(action_dist)
-        entropy += -(action_dist * action_dist.log()).sum()
 
-        observation, reward, done, info = self.env.step(action.data[0, 0])
-        action.reinforce(reward)
-        rewards.append(reward)
+        if self.is_discrete:
+          entropy += -(action_dist * action_dist.log()).sum()
+          observation, reward, done, info = self.env.step(action.data[0, 0])
+          action.reinforce(reward)
+          rewards.append(reward)
+        else:
+          entropy += (0.5 + 0.5 * torch.log(2 * (action_dist['std'] ** 2) * math.pi)).squeeze(0)
+          observation, reward, done, info = self.env.step(action.data.numpy())
+          action.reinforce(float(reward[0]))
+          rewards.append(float(reward[0]))
 
         if done:
           path = { "observations": observations,
@@ -175,7 +198,6 @@ class TRPOAgent:
           break
       timesteps_so_far += len(path["rewards"])
 
-    flatten = lambda l: [item for sublist in l for item in sublist]
     observations = flatten([path["observations"] for path in paths])
     discounted_rewards = flatten([discount(path["rewards"], self.gamma) for path in paths])
     actions = flatten([path["actions"] for path in paths])
@@ -189,9 +211,14 @@ class TRPOAgent:
     Returns an estimate of the average KL divergence between a given model and self.policy_model
     """
     observations_tensor = torch.cat([Variable(Tensor(observation)).unsqueeze(0) for observation in self.observations])
-    actprob = model(observations_tensor)
-    old_actprob = self.policy_model(observations_tensor)
-    return torch.sum(old_actprob * torch.log(old_actprob / actprob), 1).mean()
+    if self.is_discrete:
+      actprob = model(observations_tensor)
+      old_actprob = self.policy_model(observations_tensor)
+      return torch.sum(old_actprob * torch.log(old_actprob / actprob), 1).mean()
+    else:
+      mean, std = model(observations_tensor)
+      old_mean, old_std = self.policy_model(observations_tensor)
+      return (torch.log(old_std / std) + ((std ** 2 + (mean - old_mean) ** 2) / (2 * old_std ** 2)) - 0.5).mean()
 
   def hessian_vector_product(self, vector):
     """
@@ -203,7 +230,8 @@ class TRPOAgent:
     gradient = flatten_model_params([v.grad for v in self.policy_model.parameters()])
     gradient_vector_product = torch.sum(gradient * vector)
     gradient_vector_product.backward(torch.ones(gradient.size()))
-    return (flatten_model_params([v.grad for v in self.policy_model.parameters()]) - gradient).data 
+    damping_term = self.cg_damping * vector.data
+    return (flatten_model_params([v.grad for v in self.policy_model.parameters()]) - gradient).data + damping_term
 
   def hessian_vector_product_fd(self, vector, r=1e-6):
     # https://justindomke.wordpress.com/2009/01/17/hessian-vector-products/
@@ -230,15 +258,16 @@ class TRPOAgent:
     """
     Returns F^(-1)b where F is the Hessian of the KL divergence
     """
+    b = b.double()
     p = b.clone().data
     r = b.clone().data
     x = np.zeros_like(b.data.numpy())
     rdotr = r.dot(r)
     for i in xrange(self.cg_iters):
       if self.use_finite_differences:
-        z = self.hessian_vector_product_fd(Variable(p))
+        z = self.hessian_vector_product_fd(Variable(p.float())).double()
       else:
-        z = self.hessian_vector_product(Variable(p))
+        z = self.hessian_vector_product(Variable(p.float())).double()
       v = rdotr / p.dot(z)
       x += v * p.numpy()
       r -= v * z
@@ -256,8 +285,14 @@ class TRPOAgent:
     """
     new_model = self.construct_model_from_theta(theta.data)
     observations_tensor = torch.cat([Variable(Tensor(observation)).unsqueeze(0) for observation in self.observations])
-    prob_new = new_model(observations_tensor).gather(1, torch.cat(self.actions)).data
-    prob_old = self.policy_model(observations_tensor).gather(1, torch.cat(self.actions)).data
+    if self.is_discrete:
+      prob_new = new_model(observations_tensor).gather(1, torch.cat(self.actions)).data
+      prob_old = self.policy_model(observations_tensor).gather(1, torch.cat(self.actions)).data
+    else:
+      mean_new, std_new = new_model(observations_tensor)
+      prob_new = torch.exp(normal_log_density(torch.cat(self.actions), mean_new, std_new)).data
+      mean_old, std_old = self.policy_model(observations_tensor)
+      prob_old = torch.exp(normal_log_density(torch.cat(self.actions), mean_old, std_old)).data
     return -torch.sum((prob_new / prob_old) * self.advantage)
 
   def linesearch(self, x, fullstep, expected_improve_rate):
@@ -292,9 +327,14 @@ class TRPOAgent:
 
     # Normalize the advantage
     self.advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
-    
+
     # Calculate the surrogate loss as the elementwise product of the advantage and the probability ratio of actions taken
-    new_p = torch.cat(self.action_dists).gather(1, torch.cat(self.actions))
+    if self.is_discrete:
+      new_p = torch.cat(self.action_dists).gather(1, torch.cat(self.actions))
+    else:
+      mean = torch.cat([dist['mean'] for dist in self.action_dists])
+      std = torch.cat([dist['std'] for dist in self.action_dists])
+      new_p = torch.exp(normal_log_density(torch.cat(self.actions), mean, std))
     old_p = new_p.detach()
     prob_ratio = new_p / old_p
     surrogate_objective = torch.sum(prob_ratio * Variable(self.advantage))
@@ -306,7 +346,7 @@ class TRPOAgent:
 
     # Use conjugate gradient algorithm to determine the step direction in theta space
     step_direction = self.conjugate_gradient(policy_gradient)
-    step_direction_variable = Variable(torch.from_numpy(step_direction))
+    step_direction_variable = Variable(torch.from_numpy(step_direction)).float()
 
     # Do line search to determine the stepsize of theta in the direction of step_direction
     if self.use_finite_differences:
