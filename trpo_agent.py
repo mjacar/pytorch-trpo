@@ -34,10 +34,10 @@ class ValueFunctionWrapper(nn.Module):
   """
   Wrapper around any value function model to add fit and predict functions
   """
-  def __init__(self, model):
+  def __init__(self, model, lr):
     super(ValueFunctionWrapper, self).__init__()
     self.model = model
-    self.optimizer = optim.LBFGS(self.model.parameters())
+    self.optimizer = optim.LBFGS(self.model.parameters(), lr=lr)
 
   def forward(self, data):
     return self.model.forward(data)
@@ -59,6 +59,7 @@ class TRPOAgent:
                env,
                policy_model,
                value_function_model,
+               value_function_lr=1.0,
                gamma=0.95,
                max_timesteps=1000,
                max_episode_length=10000,
@@ -80,6 +81,8 @@ class TRPOAgent:
     value_function_model: torch.nn.Module
       Model to use for estimating the state values
       It should take a state as input and output the estimated value of the state
+    value_function_lr: float
+      L-BFGS learning rate used for the value function model
     gamma: float
       Discount factor
     max_timesteps: int
@@ -100,7 +103,7 @@ class TRPOAgent:
 
     self.env = env
     self.policy_model = policy_model
-    self.value_function_model = ValueFunctionWrapper(value_function_model)
+    self.value_function_model = ValueFunctionWrapper(value_function_model, value_function_lr)
 
     self.gamma = gamma
     self.max_timesteps = max_timesteps
