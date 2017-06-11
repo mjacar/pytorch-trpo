@@ -1,13 +1,14 @@
 import evaluation_utils
 import gym
 
-from models import FeedForwardRegressor, FeedForwardSoftmax
+from cartpole_wrapper import CartPoleWrapper
+from models import ConvolutionalRegressor, ConvolutionalSoftmax
 from trpo_agent import TRPOAgent
 
 def main():
-  env = gym.make('CartPole-v1')
-  policy_model = FeedForwardSoftmax(env.observation_space.shape[0], env.action_space.n)
-  value_function_model = FeedForwardRegressor(env.observation_space.shape[0])
+  env = CartPoleWrapper(gym.make('CartPole-v1'))
+  policy_model = ConvolutionalSoftmax(env.action_space.n)
+  value_function_model = ConvolutionalRegressor()
   agent = TRPOAgent(env, policy_model, value_function_model)
 
   while(True):
