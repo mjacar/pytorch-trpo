@@ -39,8 +39,9 @@ class ConvolutionalSoftmax(nn.Module):
     self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
     self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
     self.head = nn.Linear(448, output_size)
-
     self.softmax = nn.Softmax()
+
+    self.initialize_weights()
 
   def initialize_weights(self):
     conv_layers = [v for k,v in self._modules.iteritems() if 'conv' in k]
@@ -88,6 +89,8 @@ class ConvolutionalRegressor(nn.Module):
     self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
     self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
     self.head = nn.Linear(448, 1)
+
+    self.initialize_weights()
 
   def initialize_weights(self):
     conv_layers = [v for k,v in self._modules.iteritems() if 'conv' in k]
