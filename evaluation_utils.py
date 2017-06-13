@@ -22,7 +22,7 @@ def evaluate_episode(env, policy, maximum_episode_length=100000, discount_factor
   df = 1.0
   observation = env.reset()
   for _ in range(maximum_episode_length):
-    action = policy(Variable(torch.from_numpy(observation).float().unsqueeze(0))).max(1)[1].data[0, 0]
+    action = policy(Variable(torch.from_numpy(observation).float().unsqueeze(0))).max(1)[1].data[0]
     observation, immediate_reward, finished, info = env.step(action)
     reward = reward + df * immediate_reward
     df = df * discount_factor

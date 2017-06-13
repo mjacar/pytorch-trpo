@@ -37,6 +37,7 @@ class ValueFunctionWrapper(nn.Module):
   def __init__(self, model, lr):
     super(ValueFunctionWrapper, self).__init__()
     self.model = model
+    self.loss_fn = nn.MSELoss()
     self.optimizer = optim.LBFGS(self.model.parameters(), lr=lr)
 
   def forward(self, data):
@@ -45,7 +46,7 @@ class ValueFunctionWrapper(nn.Module):
   def fit(self, observations, labels):
     def closure():
       predicted = self.forward(torch.cat([Variable(Tensor(observation)).unsqueeze(0) for observation in observations]))
-      loss = torch.pow(predicted - labels, 2).sum()
+      loss = self.loss_fn(predicted, labels)
       self.optimizer.zero_grad()
       loss.backward()
       return loss
