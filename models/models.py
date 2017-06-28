@@ -104,3 +104,58 @@ class ConvolutionalRegressor(nn.Module):
     output = F.selu(self.conv3(output))
     output = self.head(output.view(output.size(0), -1))
     return output
+
+class DQNSoftmax(nn.Module):
+  def __init__(self, output_size):
+    super(DQNSoftmax, self).__init__()
+
+    self.conv1 = nn.Conv2d(4, 32, kernel_size=8, stride=4)
+    self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
+    self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+    self.fc = nn.Linear(3136, 512)
+    self.head = nn.Linear(512, output_size)
+    self.softmax = nn.Softmax()
+
+    self.initialize_weights()
+
+  def initialize_weights(self):
+    conv_layers = [v for k,v in self._modules.iteritems() if 'conv' in k]
+    for layer in conv_layers:
+      init.xavier_uniform(layer.weight)
+    init.xavier_uniform(self.head.weight)
+    init.xavier_uniform(self.fc.weight)
+
+  def forward(self, x):
+    out = F.selu((self.conv1(x)))
+    out = F.selu(self.conv2(out))
+    out = F.selu(self.conv3(out))
+    out = F.selu(self.fc(out.view(out.size(0), -1)))
+    out = self.softmax(self.head(out))
+    return out
+
+class DQNRegressor(nn.Module):
+  def __init__(self):
+    super(DQNRegressor, self).__init__()
+
+    self.conv1 = nn.Conv2d(4, 32, kernel_size=8, stride=4)
+    self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
+    self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+    self.fc = nn.Linear(3136, 512)
+    self.head = nn.Linear(512, 1)
+
+    self.initialize_weights()
+
+  def initialize_weights(self):
+    conv_layers = [v for k,v in self._modules.iteritems() if 'conv' in k]
+    for layer in conv_layers:
+      init.xavier_uniform(layer.weight)
+    init.xavier_uniform(self.head.weight)
+    init.xavier_uniform(self.fc.weight)
+
+  def forward(self, x):
+    out = F.selu((self.conv1(x)))
+    out = F.selu(self.conv2(out))
+    out = F.selu(self.conv3(out))
+    out = F.selu(self.fc(out.view(out.size(0), -1)))
+    out = self.head(out)
+    return out

@@ -1,8 +1,11 @@
-import evaluation_utils
 import gym
 
-from cartpole_wrapper import CartPoleWrapper
-from models import ConvolutionalRegressor, ConvolutionalSoftmax
+from os import sys, path
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
+from utils.evaluation_utils import evaluate_policy
+from env_wrappers.cartpole_wrapper import CartPoleWrapper
+from models.models import ConvolutionalRegressor, ConvolutionalSoftmax
 from trpo_agent import TRPOAgent
 
 def main():
@@ -13,7 +16,7 @@ def main():
 
   while(True):
     policy, diagnostics = agent.step()
-    r = evaluation_utils.evaluate_policy(env, policy, 10000, 1.0, 100)
+    r = evaluate_policy(env, policy, 10000, 1.0, 100)
     print("Evaluation avg reward = %f "% r)
     for key, value in diagnostics.iteritems():
       print("{}: {}".format(key, value))

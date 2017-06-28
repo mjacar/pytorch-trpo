@@ -1,6 +1,12 @@
 import torch
 
-from torch.autograd import Variable
+use_cuda = torch.cuda.is_available()
+
+def Variable(tensor, *args, **kwargs):
+  if use_cuda:
+    return torch.autograd.Variable(tensor, *args, **kwargs).cuda()
+  else:
+    return torch.autograd.Variable(tensor, *args, **kwargs)
 
 def evaluate_policy(env, policy, maximum_episode_length=100000, discount_factor=0.95, nb_episodes=1):
   """
@@ -18,6 +24,8 @@ def evaluate_policy(env, policy, maximum_episode_length=100000, discount_factor=
   return r / nb_episodes
 
 def evaluate_episode(env, policy, maximum_episode_length=100000, discount_factor=0.95):
+  if use_cuda:
+    policy.cuda()
   reward = 0
   df = 1.0
   observation = env.reset()

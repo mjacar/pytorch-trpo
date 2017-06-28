@@ -9,7 +9,20 @@ import torch.optim as optim
 
 from operator import mul
 from torch import Tensor
-from torch.autograd import Variable
+
+use_cuda = torch.cuda.is_available()
+
+def Variable(tensor, *args, **kwargs):
+  if use_cuda:
+    return torch.autograd.Variable(tensor, *args, **kwargs).cuda()
+  else:
+    return torch.autograd.Variable(tensor, *args, **kwargs)
+
+def Tensor(nparray):
+  if use_cuda:
+    return torch.Tensor(nparray).cuda()
+  else:
+    return torch.Tensor(nparray)
 
 def flatten_model_params(parameters):
   return torch.cat([param.view(1, -1) for param in parameters], 1)
@@ -63,7 +76,7 @@ class TRPOAgent:
                value_function_lr=1.0,
                gamma=0.95,
                max_timesteps=1000,
-               max_episode_length=10000,
+               max_episode_length=100000,
                max_kl=0.01,
                cg_damping=0.1,
                cg_iters=10,
@@ -105,6 +118,10 @@ class TRPOAgent:
     self.env = env
     self.policy_model = policy_model
     self.value_function_model = ValueFunctionWrapper(value_function_model, value_function_lr)
+
+    if use_cuda:
+      self.policy_model.cuda()
+      self.value_function_model.cuda()
 
     self.gamma = gamma
     self.max_timesteps = max_timesteps
@@ -198,34 +215,38 @@ class TRPOAgent:
     """
     Returns the product of the Hessian of the KL divergence and the given vector
     """
-    self.policy_model.zero_grad()
-    kl_div = self.kl_divergence(self.policy_model)
-    kl_div.backward(create_graph=True)
-    gradient = flatten_model_params([v.grad for v in self.policy_model.parameters()])
-    gradient_vector_product = torch.sum(gradient * vector)
-    gradient_vector_product.backward(torch.ones(gradient.size()))
-    return (flatten_model_params([v.grad for v in self.policy_model.parameters()]) - gradient).data 
-
-  def hessian_vector_product_fd(self, vector, r=1e-6):
     # https://justindomke.wordpress.com/2009/01/17/hessian-vector-products/
     # Estimate hessian vector product using finite differences
     # Note that this might be possible to calculate analytically in future versions of PyTorch
-    vector_norm = vector.data.norm()
-    theta = flatten_model_params([param for param in self.policy_model.parameters()]).data
+    if self.use_finite_differences:
+      r = 1e-6
+      vector_norm = vector.data.norm()
+      theta = flatten_model_params([param for param in self.policy_model.parameters()]).data
 
-    model_plus = self.construct_model_from_theta(theta + r * (vector.data / vector_norm))
-    model_minus = self.construct_model_from_theta(theta - r * (vector.data / vector_norm))
+      model_plus = self.construct_model_from_theta(theta + r * (vector.data / vector_norm))
+      model_minus = self.construct_model_from_theta(theta - r * (vector.data / vector_norm))
 
-    kl_plus = self.kl_divergence(model_plus)
-    kl_minus = self.kl_divergence(model_minus)
-    kl_plus.backward()
-    kl_minus.backward()
+      kl_plus = self.kl_divergence(model_plus)
+      kl_minus = self.kl_divergence(model_minus)
+      kl_plus.backward()
+      kl_minus.backward()
 
-    grad_plus = flatten_model_params([param.grad for param in model_plus.parameters()]).data
-    grad_minus = flatten_model_params([param.grad for param in model_minus.parameters()]).data
-    damping_term = self.cg_damping * vector.data
+      grad_plus = flatten_model_params([param.grad for param in model_plus.parameters()]).data
+      grad_minus = flatten_model_params([param.grad for param in model_minus.parameters()]).data
+      damping_term = self.cg_damping * vector.data
     
-    return vector_norm * ((grad_plus - grad_minus) / (2 * r)) + damping_term
+      return vector_norm * ((grad_plus - grad_minus) / (2 * r)) + damping_term
+    else:
+      self.policy_model.zero_grad()
+      kl_div = self.kl_divergence(self.policy_model)
+      kl_div.backward(create_graph=True)
+      gradient = flatten_model_params([v.grad for v in self.policy_model.parameters()])
+      gradient_vector_product = torch.sum(gradient * vector)
+      ones = torch.ones(gradient.size())
+      if use_cuda:
+        ones = ones.cuda()
+      gradient_vector_product.backward(ones)
+      return (flatten_model_params([v.grad for v in self.policy_model.parameters()]) - gradient).data 
 
   def conjugate_gradient(self, b):
     """
@@ -233,15 +254,12 @@ class TRPOAgent:
     """
     p = b.clone().data
     r = b.clone().data
-    x = np.zeros_like(b.data.numpy())
+    x = np.zeros_like(b.data.cpu().numpy())
     rdotr = r.dot(r)
     for i in xrange(self.cg_iters):
-      if self.use_finite_differences:
-        z = self.hessian_vector_product_fd(Variable(p))
-      else:
-        z = self.hessian_vector_product(Variable(p))
+      z = self.hessian_vector_product(Variable(p)).squeeze(0)
       v = rdotr / p.dot(z)
-      x += v * p.numpy()
+      x += v * p.cpu().numpy()
       r -= v * z
       newrdotr = r.dot(r)
       mu = newrdotr / rdotr
@@ -269,7 +287,7 @@ class TRPOAgent:
     max_backtracks = 10
     fval = self.surrogate_loss(x)
     for (_n_backtracks, stepfrac) in enumerate(.5**np.arange(max_backtracks)):
-      xnew = x.data.numpy() + stepfrac * fullstep
+      xnew = x.data.cpu().numpy() + stepfrac * fullstep
       newfval = self.surrogate_loss(Variable(torch.from_numpy(xnew)))
       actual_improve = fval - newfval
       expected_improve = expected_improve_rate * stepfrac
@@ -303,20 +321,17 @@ class TRPOAgent:
     # Calculate the gradient of the surrogate loss
     self.policy_model.zero_grad()
     surrogate_objective.backward(create_graph=True)
-    policy_gradient = flatten_model_params([v.grad for v in self.policy_model.parameters()])
+    policy_gradient = flatten_model_params([v.grad for v in self.policy_model.parameters()]).squeeze(0)
 
     # Use conjugate gradient algorithm to determine the step direction in theta space
     step_direction = self.conjugate_gradient(policy_gradient)
     step_direction_variable = Variable(torch.from_numpy(step_direction))
 
     # Do line search to determine the stepsize of theta in the direction of step_direction
-    if self.use_finite_differences:
-      shs = .5 * step_direction.dot(self.hessian_vector_product_fd(step_direction_variable).numpy().T)
-    else:
-      shs = .5 * step_direction.dot(self.hessian_vector_product(step_direction_variable).numpy().T)
-    lm = np.sqrt(shs[0][0] / self.max_kl)
+    shs = .5 * step_direction.dot(self.hessian_vector_product(step_direction_variable).cpu().numpy().T)
+    lm = np.sqrt(shs[0] / self.max_kl)
     fullstep = step_direction / lm
-    gdotstepdir = policy_gradient.dot(step_direction_variable.t()).data[0]
+    gdotstepdir = policy_gradient.dot(step_direction_variable).data[0]
     theta = self.linesearch(flatten_model_params(list(self.policy_model.parameters())), fullstep, gdotstepdir / lm)
 
     # Update parameters of policy model
@@ -326,9 +341,9 @@ class TRPOAgent:
     kl_old_new = self.kl_divergence(old_model)
 
     # Fit the estimated value function to the actual observed discounted rewards
-    ev_before = explained_variance_1d(baseline.squeeze(1).numpy(), self.discounted_rewards)
+    ev_before = explained_variance_1d(baseline.squeeze(1).cpu().numpy(), self.discounted_rewards)
     self.value_function_model.fit(self.observations, Variable(Tensor(self.discounted_rewards)))
-    ev_after = explained_variance_1d(self.value_function_model.predict(self.observations).data.squeeze(1).numpy(), self.discounted_rewards)
+    ev_after = explained_variance_1d(self.value_function_model.predict(self.observations).data.squeeze(1).cpu().numpy(), self.discounted_rewards)
 
     diagnostics = collections.OrderedDict([ ('KL_Old_New', kl_old_new.data[0]), ('Entropy', self.entropy.data[0]), ('EV_Before', ev_before), ('EV_After', ev_after) ])
 
