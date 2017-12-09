@@ -1,16 +1,35 @@
 # PyTorch implementation of TRPO
+This repo contains a PyTorch implementation of a [Trust Region Policy Optimization](http://arxiv.org/abs/1502.05477) agent for an environment with a discrete action space.
 
-This repo contains a PyTorch implementation of a [TRPO](http://arxiv.org/abs/1502.05477) agent for an environment with a discrete action space.
+# Environment Setup
+1. Install [conda](https://conda.io/docs/user-guide/install/index.html) for Python 2.7.
 
-## Contributions
+2.
+```
+conda create --name trpo --file conda_requirements.txt
+source activate trpo
+pip install -r pip_requirements.txt
+```
 
-Contributions are welcome. Feel free to send a pull request for any bug fixes, optimizations or general improvements.
+3. Install [PyTorch](http://github.com/pytorch/pytorch) from source at commit eff5b8b or later.
 
-## Usage
+# Usage
+```
+python run_trpo.py --env=GYM_ENV_ID
+```
+where GYM_ENV_ID is the environment ID of the [gym](http://github.com/openai/gym) environment you which to train on.
 
-See the examples directory for example usages.
+# Results
 
-## To-Do
+![trpo_pong_gif](./trpo_pong.gif)
 
-- [ ] Plot of results
-- [ ] Continuous control
+A game of Pong as played using the policy model learned from a TRPO agent
+
+![trpo_pong_png](./trpo_pong.png)
+
+Plot of total reward per episode of Pong vs. episode number
+
+# Related Repos
+[OpenAI's Baseline implementation of parallel TRPO in TensorFlow](https://github.com/openai/baselines/tree/master/baselines/trpo_mpi)
+
+[Ilya Kostrikov's implementation of TRPO for continuous control in PyTorch](https://github.com/ikostrikov/pytorch-trpo)
