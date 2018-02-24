@@ -1,9 +1,9 @@
 import collections
 import copy
 import torch
+from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_to_vector
 import numpy as np
 
-from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_to_vector
 from utils.torch_utils import use_cuda, Tensor, Variable, ValueFunctionWrapper
 import utils.math_utils as math_utils
 
@@ -100,7 +100,7 @@ class TRPOAgent:
         action_distributions.append(action_dist)
         entropy += -(action_dist * action_dist.log()).sum()
 
-        observation, reward, done, info = self.env.step(action.data[0, 0])
+        observation, reward, done, _ = self.env.step(action.data[0, 0])
         rewards.append(reward)
 
         if done:
@@ -151,7 +151,7 @@ class TRPOAgent:
     r = b.clone().data
     x = np.zeros_like(b.data.cpu().numpy())
     rdotr = r.double().dot(r.double())
-    for i in xrange(self.cg_iters):
+    for _ in xrange(self.cg_iters):
       z = self.hessian_vector_product(Variable(p)).squeeze(0)
       v = rdotr / p.double().dot(z.double())
       x += v * p.cpu().numpy()
@@ -258,7 +258,7 @@ class TRPOAgent:
           vector_to_parameters(theta, self.policy_model.parameters())
 
         kl_old_new = self.mean_kl_divergence(old_model)
-        diagnostics = collections.OrderedDict([ ('Total Reward', total_reward), ('KL Old New', kl_old_new.data[0]), ('Entropy', self.entropy.data[0]), ('EV Before', ev_before), ('EV After', ev_after)])
+        diagnostics = collections.OrderedDict([('Total Reward', total_reward), ('KL Old New', kl_old_new.data[0]), ('Entropy', self.entropy.data[0]), ('EV Before', ev_before), ('EV After', ev_after)])
         for key, value in diagnostics.iteritems():
           print("{}: {}".format(key, value))
 

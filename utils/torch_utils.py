@@ -1,9 +1,7 @@
 import numpy as np
 import torch
-
 import torch.nn as nn
 import torch.optim as optim
-
 from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_to_vector
 
 use_cuda = torch.cuda.is_available()
