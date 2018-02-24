@@ -1,10 +1,10 @@
 import argparse
 import subprocess
-import torch
-
 from itertools import count
-from models import DQNRegressor, DQNSoftmax
+import torch
 from tensorboard_logger import configure, log_value
+
+from models import DQNRegressor, DQNSoftmax
 from trpo_agent import TRPOAgent
 from utils.atari_wrapper import make_atari, wrap_deepmind
 
