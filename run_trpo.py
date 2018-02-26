@@ -8,6 +8,7 @@ from models import DQNRegressor, DQNSoftmax
 from trpo_agent import TRPOAgent
 from utils.atari_wrapper import make_atari, wrap_deepmind
 
+
 def main(env_id):
   env = wrap_deepmind(make_atari(env_id), scale=True)
   policy_model = DQNSoftmax(env.action_space.n)
@@ -23,8 +24,11 @@ def main(env_id):
     if t % 100 == 0:
       torch.save(policy_model.state_dict(), "policy_model.pth")
 
+
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument('--env', help='environment ID', default='PongNoFrameskip-v4')
+  parser = argparse.ArgumentParser(
+      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  parser.add_argument('--env', help='environment ID',
+                      default='PongNoFrameskip-v4')
   args = parser.parse_args()
   main(args.env)

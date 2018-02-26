@@ -7,6 +7,7 @@ import numpy as np
 from utils.torch_utils import use_cuda, Tensor, Variable, ValueFunctionWrapper
 import utils.math_utils as math_utils
 
+
 class TRPOAgent:
   def __init__(self,
                env,
@@ -56,7 +57,8 @@ class TRPOAgent:
 
     self.env = env
     self.policy_model = policy_model
-    self.value_function_model = ValueFunctionWrapper(value_function_model, value_function_lr)
+    self.value_function_model = ValueFunctionWrapper(
+        value_function_model, value_function_lr)
 
     if use_cuda:
       self.policy_model.cuda()
@@ -76,7 +78,8 @@ class TRPOAgent:
     Given an observation, return the action sampled from the policy model as well as the probabilities associated with each action
     """
     observation_tensor = Tensor(observation).unsqueeze(0)
-    probabilities = self.policy_model(Variable(observation_tensor, requires_grad=True))
+    probabilities = self.policy_model(
+        Variable(observation_tensor, requires_grad=True))
     action = probabilities.multinomial(1)
     return action, probabilities
 
@@ -104,17 +107,19 @@ class TRPOAgent:
         rewards.append(reward)
 
         if done:
-          path = { "observations": observations,
-                   "actions": actions,
-                   "rewards": rewards,
-                   "action_distributions": action_distributions }
+          path = {"observations": observations,
+                  "actions": actions,
+                  "rewards": rewards,
+                  "action_distributions": action_distributions}
           paths.append(path)
           break
 
-    flatten = lambda l: [item for sublist in l for item in sublist]
+    def flatten(l): return [item for sublist in l for item in sublist]
     observations = flatten([path["observations"] for path in paths])
-    discounted_rewards = flatten([math_utils.discount(path["rewards"], self.gamma) for path in paths])
-    total_reward = sum(flatten([path["rewards"] for path in paths])) / self.episodes
+    discounted_rewards = flatten([math_utils.discount(
+        path["rewards"], self.gamma) for path in paths])
+    total_reward = sum(flatten([path["rewards"]
+                                for path in paths])) / self.episodes
     actions = flatten([path["actions"] for path in paths])
     action_dists = flatten([path["action_distributions"] for path in paths])
     entropy = entropy / len(actions)
@@ -125,7 +130,8 @@ class TRPOAgent:
     """
     Returns an estimate of the average KL divergence between a given model and self.policy_model
     """
-    observations_tensor = torch.cat([Variable(Tensor(observation)).unsqueeze(0) for observation in self.observations])
+    observations_tensor = torch.cat(
+        [Variable(Tensor(observation)).unsqueeze(0) for observation in self.observations])
     actprob = model(observations_tensor).detach() + 1e-8
     old_actprob = self.policy_model(observations_tensor)
     return torch.sum(old_actprob * torch.log(old_actprob / actprob), 1).mean()
@@ -136,11 +142,14 @@ class TRPOAgent:
     """
     self.policy_model.zero_grad()
     mean_kl_div = self.mean_kl_divergence(self.policy_model)
-    kl_grad = torch.autograd.grad(mean_kl_div, self.policy_model.parameters(), create_graph=True)
+    kl_grad = torch.autograd.grad(
+        mean_kl_div, self.policy_model.parameters(), create_graph=True)
     kl_grad_vector = torch.cat([grad.view(-1) for grad in kl_grad])
     grad_vector_product = torch.sum(kl_grad_vector * vector)
-    grad_grad = torch.autograd.grad(grad_vector_product, self.policy_model.parameters())
-    fisher_vector_product = torch.cat([grad.contiguous().view(-1) for grad in grad_grad]).data
+    grad_grad = torch.autograd.grad(
+        grad_vector_product, self.policy_model.parameters())
+    fisher_vector_product = torch.cat(
+        [grad.contiguous().view(-1) for grad in grad_grad]).data
     return fisher_vector_product + (self.cg_damping * vector.data)
 
   def conjugate_gradient(self, b):
@@ -170,9 +179,12 @@ class TRPOAgent:
     """
     new_model = copy.deepcopy(self.policy_model)
     vector_to_parameters(theta, new_model.parameters())
-    observations_tensor = torch.cat([Variable(Tensor(observation)).unsqueeze(0) for observation in self.observations])
-    prob_new = new_model(observations_tensor).gather(1, torch.cat(self.actions)).data
-    prob_old = self.policy_model(observations_tensor).gather(1, torch.cat(self.actions)).data + 1e-8
+    observations_tensor = torch.cat(
+        [Variable(Tensor(observation)).unsqueeze(0) for observation in self.observations])
+    prob_new = new_model(observations_tensor).gather(
+        1, torch.cat(self.actions)).data
+    prob_old = self.policy_model(observations_tensor).gather(
+        1, torch.cat(self.actions)).data + 1e-8
     return -torch.mean((prob_new / prob_old) * self.advantage)
 
   def linesearch(self, x, fullstep, expected_improve_rate):
@@ -200,13 +212,18 @@ class TRPOAgent:
     # Generate rollout
     all_observations, all_discounted_rewards, total_reward, all_actions, all_action_dists, self.entropy = self.sample_trajectories()
 
-    num_batches = len(all_actions) / self.batch_size if len(all_actions) % self.batch_size == 0 else (len(all_actions) / self.batch_size) + 1
+    num_batches = len(all_actions) / self.batch_size if len(
+        all_actions) % self.batch_size == 0 else (len(all_actions) / self.batch_size) + 1
     for batch_num in range(num_batches):
       print("Processing batch number {}".format(batch_num+1))
-      self.observations = all_observations[batch_num*self.batch_size:(batch_num+1)*self.batch_size]
-      self.discounted_rewards = all_discounted_rewards[batch_num*self.batch_size:(batch_num+1)*self.batch_size]
-      self.actions = all_actions[batch_num*self.batch_size:(batch_num+1)*self.batch_size]
-      self.action_dists = all_action_dists[batch_num*self.batch_size:(batch_num+1)*self.batch_size]
+      self.observations = all_observations[batch_num *
+                                           self.batch_size:(batch_num+1)*self.batch_size]
+      self.discounted_rewards = all_discounted_rewards[batch_num*self.batch_size:(
+          batch_num+1)*self.batch_size]
+      self.actions = all_actions[batch_num *
+                                 self.batch_size:(batch_num+1)*self.batch_size]
+      self.action_dists = all_action_dists[batch_num *
+                                           self.batch_size:(batch_num+1)*self.batch_size]
 
       # Calculate the advantage of each step by taking the actual discounted rewards seen
       # and subtracting the estimated value of each state
@@ -215,18 +232,22 @@ class TRPOAgent:
       advantage = discounted_rewards_tensor - baseline
 
       # Normalize the advantage
-      self.advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+      self.advantage = (advantage - advantage.mean()) / \
+          (advantage.std() + 1e-8)
 
       # Calculate the surrogate loss as the elementwise product of the advantage and the probability ratio of actions taken
       new_p = torch.cat(self.action_dists).gather(1, torch.cat(self.actions))
       old_p = new_p.detach() + 1e-8
       prob_ratio = new_p / old_p
-      surrogate_loss = -torch.mean(prob_ratio * Variable(self.advantage)) - (self.ent_coeff * self.entropy)
+      surrogate_loss = - \
+          torch.mean(prob_ratio * Variable(self.advantage)) - \
+          (self.ent_coeff * self.entropy)
 
       # Calculate the gradient of the surrogate loss
       self.policy_model.zero_grad()
       surrogate_loss.backward(retain_graph=True)
-      policy_gradient = parameters_to_vector([v.grad for v in self.policy_model.parameters()]).squeeze(0)
+      policy_gradient = parameters_to_vector(
+          [v.grad for v in self.policy_model.parameters()]).squeeze(0)
 
       if policy_gradient.nonzero().size()[0]:
         # Use conjugate gradient algorithm to determine the step direction in theta space
@@ -234,20 +255,28 @@ class TRPOAgent:
         step_direction_variable = Variable(torch.from_numpy(step_direction))
 
         # Do line search to determine the stepsize of theta in the direction of step_direction
-        shs = .5 * step_direction.dot(self.hessian_vector_product(step_direction_variable).cpu().numpy().T)
+        shs = .5 * \
+            step_direction.dot(self.hessian_vector_product(
+                step_direction_variable).cpu().numpy().T)
         lm = np.sqrt(shs / self.max_kl)
         fullstep = step_direction / lm
         gdotstepdir = -policy_gradient.dot(step_direction_variable).data[0]
-        theta = self.linesearch(parameters_to_vector(self.policy_model.parameters()), fullstep, gdotstepdir / lm)
+        theta = self.linesearch(parameters_to_vector(
+            self.policy_model.parameters()), fullstep, gdotstepdir / lm)
 
         # Fit the estimated value function to the actual observed discounted rewards
-        ev_before = math_utils.explained_variance_1d(baseline.squeeze(1).cpu().numpy(), self.discounted_rewards)
+        ev_before = math_utils.explained_variance_1d(
+            baseline.squeeze(1).cpu().numpy(), self.discounted_rewards)
         self.value_function_model.zero_grad()
-        value_fn_params = parameters_to_vector(self.value_function_model.parameters())
-        self.value_function_model.fit(self.observations, Variable(Tensor(self.discounted_rewards)))
-        ev_after = math_utils.explained_variance_1d(self.value_function_model.predict(self.observations).data.squeeze(1).cpu().numpy(), self.discounted_rewards)
+        value_fn_params = parameters_to_vector(
+            self.value_function_model.parameters())
+        self.value_function_model.fit(
+            self.observations, Variable(Tensor(self.discounted_rewards)))
+        ev_after = math_utils.explained_variance_1d(self.value_function_model.predict(
+            self.observations).data.squeeze(1).cpu().numpy(), self.discounted_rewards)
         if ev_after < ev_before or np.abs(ev_after) < 1e-4:
-          vector_to_parameters(value_fn_params, self.value_function_model.parameters())
+          vector_to_parameters(
+              value_fn_params, self.value_function_model.parameters())
 
         # Update parameters of policy model
         old_model = copy.deepcopy(self.policy_model)
@@ -258,7 +287,8 @@ class TRPOAgent:
           vector_to_parameters(theta, self.policy_model.parameters())
 
         kl_old_new = self.mean_kl_divergence(old_model)
-        diagnostics = collections.OrderedDict([('Total Reward', total_reward), ('KL Old New', kl_old_new.data[0]), ('Entropy', self.entropy.data[0]), ('EV Before', ev_before), ('EV After', ev_after)])
+        diagnostics = collections.OrderedDict([('Total Reward', total_reward), ('KL Old New', kl_old_new.data[0]), (
+            'Entropy', self.entropy.data[0]), ('EV Before', ev_before), ('EV After', ev_after)])
         for key, value in diagnostics.iteritems():
           print("{}: {}".format(key, value))
 

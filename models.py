@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class DQNSoftmax(nn.Module):
   def __init__(self, output_size):
     super(DQNSoftmax, self).__init__()
@@ -17,6 +18,7 @@ class DQNSoftmax(nn.Module):
     out = F.relu(self.fc(out.view(out.size(0), -1)))
     out = self.softmax(self.head(out))
     return out
+
 
 class DQNRegressor(nn.Module):
   def __init__(self):

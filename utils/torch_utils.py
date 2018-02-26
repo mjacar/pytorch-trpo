@@ -6,11 +6,13 @@ from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_t
 
 use_cuda = torch.cuda.is_available()
 
+
 def Variable(tensor, *args, **kwargs):
   if use_cuda:
     return torch.autograd.Variable(tensor, *args, **kwargs).cuda()
   else:
     return torch.autograd.Variable(tensor, *args, **kwargs)
+
 
 def Tensor(nparray):
   if use_cuda:
@@ -18,10 +20,12 @@ def Tensor(nparray):
   else:
     return torch.Tensor(nparray)
 
+
 class ValueFunctionWrapper(nn.Module):
   """
   Wrapper around any value function model to add fit and predict functions
   """
+
   def __init__(self, model, lr):
     super(ValueFunctionWrapper, self).__init__()
     self.model = model
